@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administración de Cursos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #e5e7eb; /* Gray-200 background */
+        }
+        .btn-primary {
+            background-color: #2563eb; /* Blue-600 */
+            color: white;
+            transition: background-color 0.3s ease;
+        }
+        .btn-primary:hover {
+            background-color: #1d4ed8; /* Blue-700 */
+        }
+        .btn-danger {
+            background-color: #dc2626; /* Red-600 */
+            color: white;
+            transition: background-color 0.3s ease;
+        }
+        .btn-danger:hover {
+            background-color: #b91c1c; /* Red-700 */
+        }
+        .course-manage-card {
+            transition: box-shadow 0.3s ease;
+        }
+         .course-manage-card:hover {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8 md:mb-12">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800">Panel de Administración de Cursos</h1>
+            <p class="text-gray-600 mt-2">Añade, edita o elimina cursos del catálogo.</p>
+            <div class="mt-4">
+                <a href="index.html" class="text-blue-600 hover:text-blue-800 font-medium underline">
+                    &larr; Volver al Catálogo Público
+                </a>
+            </div>
+        </header>
+
+        <section id="manageCourseSection" class="mb-10 p-6 md:p-8 bg-white rounded-xl shadow-xl">
+            <h2 id="formTitle" class="text-2xl font-semibold text-gray-700 mb-6">Añadir Nuevo Curso</h2>
+            <form id="manageCourseForm" class="space-y-6">
+                <input type="hidden" id="courseId" name="courseId"> <div>
+                    <label for="courseTitle" class="block text-sm font-medium text-gray-700">Título del Curso</label>
+                    <input type="text" id="courseTitle" name="courseTitle" required
+                           class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="courseDescription" class="block text-sm font-medium text-gray-700">Descripción Completa</label>
+                    <textarea id="courseDescription" name="courseDescription" rows="4" required
+                              class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"></textarea>
+                </div>
+                <div>
+                    <label for="courseImageUrl" class="block text-sm font-medium text-gray-700">URL de la Imagen de Portada (cuadrada)</label>
+                    <input type="url" id="courseImageUrl" name="courseImageUrl" required
+                           placeholder="https://ejemplo.com/imagen_cuadrada.jpg"
+                           class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                           <p class="mt-1 text-xs text-gray-500">Asegúrate que la URL sea de una imagen cuadrada (ej: 400x400px).</p>
+                </div>
+                <div>
+                    <label for="courseWhatsappTag" class="block text-sm font-medium text-gray-700">Etiqueta para WhatsApp (ID único del curso)</label>
+                    <input type="text" id="courseWhatsappTag" name="courseWhatsappTag" required
+                           placeholder="EJ: CURSO_PYTHON_BASICO"
+                           class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+                <div class="flex space-x-4">
+                    <button type="submit" id="saveCourseBtn" class="flex-1 btn-primary font-semibold py-2.5 px-4 rounded-lg shadow-md">
+                        Guardar Curso
+                    </button>
+                    <button type="button" id="cancelEditBtn" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2.5 px-4 rounded-lg shadow-md hidden">
+                        Cancelar Edición
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <section id="existingCoursesSection" class="mt-12">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-6">Cursos Existentes</h2>
+            <div id="existingCoursesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                </div>
+        </section>
+    </div>
+    
+    <div id="messageContainer"></div>
+
+
+    <script>
+        // --- REFERENCIAS A ELEMENTOS DEL DOM ---
+        const manageCourseForm = document.getElementById('manageCourseForm');
+        const formTitle = document.getElementById('formTitle');
+        const courseIdInput = document.getElementById('courseId');
+        const courseTitleInput = document.getElementById('courseTitle');
+        const courseDescriptionInput = document.getElementById('courseDescription');
+        const courseImageUrlInput = document.getElementById('courseImageUrl');
+        const courseWhatsappTagInput = document.getElementById('courseWhatsappTag');
+        const saveCourseBtn = document.getElementById('saveCourseBtn');
+        const cancelEditBtn = document.getElementById('cancelEditBtn');
+        
+        const existingCoursesGrid = document.getElementById('existingCoursesGrid');
+        const messageContainer = document.getElementById('messageContainer');
+
+        let courses = []; // Array para almacenar los cursos
+        let editingCourseId = null; // Para rastrear si estamos editando
+
+        // --- FUNCIONES ---
+
+        // Cargar cursos desde localStorage
+        function loadCoursesFromStorage() {
+            const storedCourses = localStorage.getItem('courses');
+            if (storedCourses) {
+                courses = JSON.parse(storedCourses);
+            } else {
+                // Si no hay cursos, podemos inicializar con un array vacío o ejemplos
+                // Para la página de admin, es mejor empezar vacío si no hay nada.
+                courses = [];
+            }
+            renderExistingCourses();
+        }
+
+        // Guardar cursos en localStorage
+        function saveCoursesToStorage() {
+            localStorage.setItem('courses', JSON.stringify(courses));
+        }
+
+        // Renderizar cursos existentes para administración
+        function renderExistingCourses() {
+            existingCoursesGrid.innerHTML = ''; // Limpiar vista
+            if (courses.length === 0) {
+                existingCoursesGrid.innerHTML = `<p class="col-span-full text-center text-gray-500 py-8">No hay cursos guardados. Añade uno nuevo usando el formulario de arriba.</p>`;
+                return;
+            }
+
+            courses.forEach(course => {
+                const courseDiv = document.createElement('div');
+                courseDiv.className = 'course-manage-card bg-white p-4 rounded-lg shadow-md flex flex-col space-y-3';
+                courseDiv.innerHTML = `
+                    <div>
+                        <img src="${course.imageUrl}" alt="${course.title}" class="w-full h-40 object-cover rounded-md mb-2" onerror="this.onerror=null;this.src='https://placehold.co/400x400/cccccc/ffffff?text=No+Img';">
+                        <h4 class="text-lg font-semibold text-gray-800">${course.title}</h4>
+                        <p class="text-xs text-gray-500">ID: ${course.id}</p>
+                        <p class="text-xs text-gray-500">Tag WhatsApp: ${course.whatsappTag}</p>
+                    </div>
+                    <p class="text-sm text-gray-600 flex-grow">${course.description.substring(0,80)}...</p>
+                    <div class="flex space-x-2 mt-auto pt-2 border-t border-gray-200">
+                        <button data-id="${course.id}" class="edit-btn flex-1 bg-yellow-400 hover:bg-yellow-500 text-white font-medium py-1.5 px-3 rounded-md text-sm">Editar</button>
+                        <button data-id="${course.id}" class="delete-btn flex-1 btn-danger font-medium py-1.5 px-3 rounded-md text-sm">Eliminar</button>
+                    </div>
+                `;
+                existingCoursesGrid.appendChild(courseDiv);
+            });
+
+            // Añadir event listeners a los nuevos botones
+            document.querySelectorAll('.edit-btn').forEach(button => {
+                button.addEventListener('click', handleEditCourse);
+            });
+            document.querySelectorAll('.delete-btn').forEach(button => {
+                button.addEventListener('click', handleDeleteCourse);
+            });
+        }
+        
+        // Función para mostrar mensajes (reemplazo de alert)
+        function showAdminMessage(message, type = 'info') {
+            const existingMessage = document.getElementById('dynamicAdminMessage');
+            if (existingMessage) {
+                existingMessage.remove();
+            }
+
+            const messageDiv = document.createElement('div');
+            messageDiv.id = 'dynamicAdminMessage'; // ID único para este mensaje
+            messageDiv.style.position = 'fixed';
+            messageDiv.style.bottom = '20px'; // Posición en la parte inferior
+            messageDiv.style.right = '20px';
+            messageDiv.style.padding = '12px 20px';
+            messageDiv.style.borderRadius = '6px';
+            messageDiv.style.color = 'white';
+            messageDiv.style.zIndex = '1000';
+            messageDiv.style.boxShadow = '0 2px 10px rgba(0,0,0,0.15)';
+            messageDiv.textContent = message;
+
+            if (type === 'error') {
+                messageDiv.style.backgroundColor = '#ef4444'; // Tailwind red-500
+            } else if (type === 'success') {
+                messageDiv.style.backgroundColor = '#22c55e'; // Tailwind green-500
+            } else { // info
+                messageDiv.style.backgroundColor = '#3b82f6'; // Tailwind blue-500
+            }
+            
+            // Usar el messageContainer si existe, sino el body
+            (messageContainer || document.body).appendChild(messageDiv);
+
+
+            setTimeout(() => {
+                messageDiv.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                messageDiv.style.opacity = '0';
+                messageDiv.style.transform = 'translateY(20px)';
+                setTimeout(() => messageDiv.remove(), 500);
+            }, 3500);
+        }
+
+
+        // Manejar envío del formulario (agregar o editar curso)
+        manageCourseForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const title = courseTitleInput.value.trim();
+            const description = courseDescriptionInput.value.trim();
+            const imageUrl = courseImageUrlInput.value.trim();
+            // Convertir tag a mayúsculas y reemplazar espacios con guiones bajos
+            const whatsappTag = courseWhatsappTagInput.value.trim().toUpperCase().replace(/\s+/g, '_');
+
+            if (!title || !description || !imageUrl || !whatsappTag) {
+                showAdminMessage('Por favor, completa todos los campos.', 'error');
+                return;
+            }
+
+            if (editingCourseId) { // Editando curso existente
+                const courseIndex = courses.findIndex(c => c.id === editingCourseId);
+                if (courseIndex > -1) {
+                    courses[courseIndex] = { ...courses[courseIndex], title, description, imageUrl, whatsappTag };
+                    showAdminMessage('Curso actualizado con éxito.', 'success');
+                }
+            } else { // Agregando nuevo curso
+                // Generar un ID único simple basado en el tag y un timestamp
+                const newCourseId = whatsappTag + '-' + Date.now();
+                const newCourse = { id: newCourseId, title, description, imageUrl, whatsappTag };
+                courses.push(newCourse);
+                showAdminMessage('Curso agregado con éxito.', 'success');
+            }
+
+            saveCoursesToStorage();
+            renderExistingCourses();
+            resetForm();
+        });
+
+        // Preparar formulario para edición
+        function handleEditCourse(e) {
+            editingCourseId = e.target.dataset.id;
+            const courseToEdit = courses.find(c => c.id === editingCourseId);
+            if (courseToEdit) {
+                formTitle.textContent = 'Editar Curso';
+                courseIdInput.value = courseToEdit.id;
+                courseTitleInput.value = courseToEdit.title;
+                courseDescriptionInput.value = courseToEdit.description;
+                courseImageUrlInput.value = courseToEdit.imageUrl;
+                courseWhatsappTagInput.value = courseToEdit.whatsappTag;
+                saveCourseBtn.textContent = 'Guardar Cambios';
+                cancelEditBtn.classList.remove('hidden');
+                window.scrollTo({ top: manageCourseSection.offsetTop - 20, behavior: 'smooth' });
+                courseTitleInput.focus();
+            }
+        }
+        
+        // Eliminar un curso
+        function handleDeleteCourse(e) {
+            const courseIdToDelete = e.target.dataset.id;
+            if (confirm('¿Estás seguro de que quieres eliminar este curso? Esta acción no se puede deshacer.')) {
+                courses = courses.filter(c => c.id !== courseIdToDelete);
+                saveCoursesToStorage();
+                renderExistingCourses();
+                showAdminMessage('Curso eliminado.', 'info');
+                if (editingCourseId === courseIdToDelete) { // Si se estaba editando el curso eliminado
+                    resetForm();
+                }
+            }
+        }
+
+        // Resetear formulario
+        function resetForm() {
+            manageCourseForm.reset();
+            editingCourseId = null;
+            formTitle.textContent = 'Añadir Nuevo Curso';
+            saveCourseBtn.textContent = 'Guardar Curso';
+            cancelEditBtn.classList.add('hidden');
+            courseIdInput.value = '';
+        }
+
+        cancelEditBtn.addEventListener('click', resetForm);
+
+        // --- INICIALIZACIÓN ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadCoursesFromStorage(); // Carga inicial de cursos
+        });
+    </script>
+</body>
+</html>
+```
+
+**Cómo Usar la Página de Administración:**
+
+1.  **Guarda el Código:** Guarda el código de arriba en un archivo llamado `admin_cursos.html` (o el nombre que prefieras) en la **misma carpeta** donde tienes tu archivo principal del catálogo (por ejemplo, `index.html`).
+2.  **Accede Directamente:** Abre este archivo `admin_cursos.html` en tu navegador. No estará enlazado desde la página pública del catálogo.
+3.  **Gestiona Cursos:**
+    * **Añadir:** Usa el formulario para agregar nuevos cursos. Recuerda usar URLs de imágenes cuadradas.
+    * **Ver/Editar/Eliminar:** Los cursos existentes se listarán debajo del formulario. Podrás editarlos o eliminarlos.
+    * Los cambios se guardarán en `localStorage` y se reflejarán automáticamente en la página pública del catálogo cuando se recargue o se visite.
+4.  **Volver al Catálogo:** Hay un enlace en la parte superior para regresar fácilmente a la vista pública del catálogo.
+
+**Consideraciones de Seguridad:**
+
+* Esta página de administración es "oculta" solo porque no está enlazada públicamente. Cualquiera que conozca la URL directa (`admin_cursos.html`) podrá acceder a ella.
+* Para una aplicación real con datos sensibles o que necesite mayor seguridad, deberías implementar un sistema de autenticación en un backend (un servidor) para proteger el acceso a las funciones administrativas. La solución actual es adecuada para un proyecto personal o de pequeña escala donde la simplicidad es clave.
+
+Con estos dos archivos, tendrás tu catálogo público con imágenes cuadradas y una página separada para administrar los cursos. ¡Espero que esto cumpla con tus requisit

@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catálogo de Cursos Interactivos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Light gray background */
+        }
+        .course-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .course-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .modal {
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal-content {
+            transition: transform 0.3s ease;
+        }
+        .btn-primary { /* Aunque no se usa en esta vista, lo mantenemos por si se reutiliza */
+            background-color: #2563eb; /* Blue-600 */
+            color: white;
+            transition: background-color 0.3s ease;
+        }
+        .btn-primary:hover {
+            background-color: #1d4ed8; /* Blue-700 */
+        }
+        .btn-whatsapp {
+            background-color: #25D366;
+            color: white;
+            transition: background-color 0.3s ease;
+        }
+        .btn-whatsapp:hover {
+            background-color: #1DAE52;
+        }
+        /* Custom scrollbar for modal content if it overflows */
+        .modal-body::-webkit-scrollbar {
+            width: 8px;
+        }
+        .modal-body::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .modal-body::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        .modal-body::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        /* For square images in cards */
+        .course-image-container {
+            width: 100%;
+            padding-bottom: 100%; /* This creates a square aspect ratio container */
+            position: relative;
+            overflow: hidden; /* Ensures image parts outside the square are clipped */
+            border-radius: 0.5rem; /* rounded-lg for the container if image is inside */
+        }
+        .course-image-container img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* Ensures the image covers the square, cropping if necessary */
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8 md:mb-12">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800">Catálogo de Cursos</h1>
+            <p class="text-gray-600 mt-2">Explora nuestros cursos y encuentra el ideal para ti.</p>
+        </header>
+
+        <main id="courseGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
+            </main>
+    </div>
+
+    <div id="courseModal" class="modal fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 invisible opacity-0 z-50">
+        <div class="modal-content bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden transform scale-95">
+            <div class="flex justify-between items-center p-5 border-b border-gray-200">
+                <h3 id="modalCourseTitle" class="text-2xl font-semibold text-gray-800"></h3>
+                <button id="closeModalBtn" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            </div>
+            <div class="modal-body p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+                <img id="modalCourseImage" src="" alt="Imagen del Curso" class="w-full h-64 object-cover rounded-lg mb-6 shadow">
+                <p id="modalCourseDescription" class="text-gray-700 leading-relaxed"></p>
+            </div>
+            <div class="p-5 border-t border-gray-200 text-right">
+                 <button id="modalBuyButton" class="btn-whatsapp font-semibold py-2 px-6 rounded-lg shadow-md">
+                    Comprar por WhatsApp
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓN ---
+        const WHATSAPP_PHONE_NUMBER = 'TU_NUMERO_DE_WHATSAPP_AQUI'; // Reemplaza con tu número de WhatsApp (ej: 573001234567)
+
+        // --- REFERENCIAS A ELEMENTOS DEL DOM ---
+        const courseGrid = document.getElementById('courseGrid');
+        const courseModal = document.getElementById('courseModal');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const modalCourseTitle = document.getElementById('modalCourseTitle');
+        const modalCourseImage = document.getElementById('modalCourseImage');
+        const modalCourseDescription = document.getElementById('modalCourseDescription');
+        const modalBuyButton = document.getElementById('modalBuyButton');
+
+        // --- DATOS INICIALES DE CURSOS (EJEMPLO) ---
+        // Estos se usarán si no hay nada en localStorage.
+        // La página de administración se encargará de añadir/modificar estos.
+        let courses = [
+            {
+                id: 'html-css-inicial',
+                title: 'HTML5 y CSS3 Desde Cero',
+                description: 'Aprende los fundamentos del desarrollo web creando estructuras con HTML5 y aplicando estilos con CSS3. Ideal para principiantes que quieren iniciar en el mundo de la programación web. Cubriremos temas como semántica HTML, selectores CSS, Flexbox, Grid y responsive design.',
+                imageUrl: 'https://placehold.co/400x400/3498db/ffffff?text=HTML+y+CSS', // Imagen cuadrada
+                whatsappTag: 'CURSO_HTML_CSS'
+            },
+            {
+                id: 'javascript-moderno',
+                title: 'JavaScript Moderno: ES6+',
+                description: 'Domina JavaScript, el lenguaje de programación esencial para la web. Aprenderás desde variables y funciones hasta conceptos avanzados como promesas, async/await, módulos y manipulación del DOM. Prepara tus bases para frameworks como React o Angular.',
+                imageUrl: 'https://placehold.co/400x400/f1c40f/000000?text=JavaScript+ES6%2B', // Imagen cuadrada
+                whatsappTag: 'CURSO_JS_MODERNO'
+            },
+            {
+                id: 'react-desarrollo-frontend',
+                title: 'React: Desarrollo Frontend',
+                description: 'Construye interfaces de usuario interactivas y reutilizables con React, la librería de JavaScript más popular. Aprenderás sobre componentes, estado, props, hooks, y cómo conectar tu aplicación a APIs externas. Proyecto final práctico incluido.',
+                imageUrl: 'https://placehold.co/400x400/2ecc71/ffffff?text=React+Frontend', // Imagen cuadrada
+                whatsappTag: 'CURSO_REACT_FRONTEND'
+            }
+        ];
+
+        // --- FUNCIONES ---
+
+        // Cargar cursos desde localStorage o usar los iniciales
+        function loadCourses() {
+            const storedCourses = localStorage.getItem('courses');
+            // Si hay cursos guardados, los usamos. Si no, usamos los de ejemplo.
+            // La página de admin será la principal fuente para modificar localStorage.
+            if (storedCourses) {
+                courses = JSON.parse(storedCourses);
+            }
+            renderCourses();
+        }
+
+        // Renderizar los cursos en la cuadrícula
+        function renderCourses() {
+            courseGrid.innerHTML = ''; // Limpiar la cuadrícula
+            if (courses.length === 0) {
+                courseGrid.innerHTML = `<p class="col-span-full text-center text-gray-500 text-xl py-10">No hay cursos disponibles en este momento.</p>`;
+                return;
+            }
+            courses.forEach(course => {
+                const courseCard = document.createElement('div');
+                courseCard.className = 'course-card bg-white rounded-xl shadow-lg overflow-hidden flex flex-col';
+                courseCard.innerHTML = `
+                    <div class="course-image-container">
+                        <img src="${course.imageUrl}" alt="Imagen de ${course.title}" onerror="this.onerror=null;this.src='https://placehold.co/400x400/cccccc/ffffff?text=Imagen+no+disponible';">
+                    </div>
+                    <div class="p-5 flex flex-col flex-grow">
+                        <h3 class="text-xl font-semibold text-gray-800 mb-2">${course.title}</h3>
+                        <p class="text-gray-600 text-sm mb-4 flex-grow">${course.description.substring(0, 100)}...</p>
+                        <div class="mt-auto">
+                             <button data-course-id="${course.id}" class="view-details-btn w-full text-blue-600 hover:text-blue-800 font-medium py-2 px-4 rounded-lg border border-blue-600 hover:bg-blue-50 transition duration-150 ease-in-out mb-2">
+                                Ver Detalles
+                            </button>
+                            <button data-whatsapp-tag="${course.whatsappTag}" class="buy-btn btn-whatsapp w-full font-semibold py-2 px-4 rounded-lg shadow-md">
+                                COMPRAR
+                            </button>
+                        </div>
+                    </div>
+                `;
+                // Event listener para ver detalles (en la imagen y en el botón de detalles)
+                courseCard.querySelector('.course-image-container img').addEventListener('click', () => showCourseDetails(course.id));
+                courseCard.querySelector('.view-details-btn').addEventListener('click', () => showCourseDetails(course.id));
+                
+                // Event listener para el botón de comprar
+                courseCard.querySelector('.buy-btn').addEventListener('click', (e) => {
+                    e.stopPropagation(); 
+                    const tag = e.target.closest('button').dataset.whatsappTag;
+                    openWhatsApp(tag);
+                });
+                courseGrid.appendChild(courseCard);
+            });
+        }
+
+        // Mostrar el modal con los detalles del curso
+        function showCourseDetails(courseId) {
+            const course = courses.find(c => c.id === courseId);
+            if (course) {
+                modalCourseTitle.textContent = course.title;
+                modalCourseImage.src = course.imageUrl; // La imagen del modal puede tener su propio aspect ratio
+                modalCourseImage.alt = `Imagen de ${course.title}`;
+                modalCourseDescription.textContent = course.description;
+                
+                modalBuyButton.dataset.whatsappTag = course.whatsappTag;
+
+                courseModal.classList.remove('invisible', 'opacity-0');
+                courseModal.querySelector('.modal-content').classList.remove('scale-95');
+                courseModal.classList.add('opacity-100');
+                courseModal.querySelector('.modal-content').classList.add('scale-100');
+                document.body.style.overflow = 'hidden'; 
+            }
+        }
+
+        // Ocultar el modal
+        function hideCourseModal() {
+            courseModal.classList.add('opacity-0', 'scale-95');
+            courseModal.querySelector('.modal-content').classList.add('scale-95');
+            setTimeout(() => {
+                 courseModal.classList.add('invisible');
+                 courseModal.querySelector('.modal-content').classList.remove('scale-100');
+                 document.body.style.overflow = 'auto'; 
+            }, 300); 
+        }
+
+        // Abrir WhatsApp con el mensaje
+        function openWhatsApp(tag) {
+            if (!WHATSAPP_PHONE_NUMBER || WHATSAPP_PHONE_NUMBER === 'TU_NUMERO_DE_WHATSAPP_AQUI') {
+                // Usaremos un div de mensaje en lugar de alert
+                displayMessage('Por favor, configura tu número de WhatsApp en el script.', 'error');
+                return;
+            }
+            const message = encodeURIComponent(`Hola, estoy interesado en el curso: ${tag}`);
+            const whatsappUrl = `https://api.whatsapp.com/send?phone=${WHATSAPP_PHONE_NUMBER}&text=${message}`;
+            window.open(whatsappUrl, '_blank');
+        }
+        
+        // Función para mostrar mensajes (reemplazo de alert)
+        function displayMessage(message, type = 'info') {
+            const existingMessage = document.getElementById('dynamicMessage');
+            if (existingMessage) {
+                existingMessage.remove();
+            }
+
+            const messageDiv = document.createElement('div');
+            messageDiv.id = 'dynamicMessage';
+            messageDiv.style.position = 'fixed';
+            messageDiv.style.top = '20px';
+            messageDiv.style.left = '50%';
+            messageDiv.style.transform = 'translateX(-50%)';
+            messageDiv.style.padding = '15px 25px';
+            messageDiv.style.borderRadius = '8px';
+            messageDiv.style.color = 'white';
+            messageDiv.style.zIndex = '1000';
+            messageDiv.style.boxShadow = '0 4px 15px rgba(0,0,0,0.2)';
+            messageDiv.textContent = message;
+
+            if (type === 'error') {
+                messageDiv.style.backgroundColor = '#ef4444'; // Tailwind red-500
+            } else if (type === 'success') {
+                messageDiv.style.backgroundColor = '#22c55e'; // Tailwind green-500
+            } else {
+                messageDiv.style.backgroundColor = '#3b82f6'; // Tailwind blue-500
+            }
+
+            document.body.appendChild(messageDiv);
+
+            setTimeout(() => {
+                messageDiv.style.transition = 'opacity 0.5s ease';
+                messageDiv.style.opacity = '0';
+                setTimeout(() => messageDiv.remove(), 500);
+            }, 3000);
+        }
+
+
+        // --- EVENT LISTENERS ---
+        closeModalBtn.addEventListener('click', hideCourseModal);
+        courseModal.addEventListener('click', (e) => {
+            if (e.target === courseModal) {
+                hideCourseModal();
+            }
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !courseModal.classList.contains('invisible')) {
+                hideCourseModal();
+            }
+        });
+        modalBuyButton.addEventListener('click', (e) => {
+            const tag = e.target.dataset.whatsappTag;
+            openWhatsApp(tag);
+        });
+
+        // --- INICIALIZACIÓN ---
+        document.addEventListener('DOMContentLoaded', loadCourses);
+
+    </script>
+</body>
+</html>
