@@ -19,6 +19,14 @@
         .btn-primary:hover {
             background-color: #1d4ed8; /* Blue-700 */
         }
+        .btn-secondary {
+            background-color: #6b7280; /* Gray-500 */
+            color: white;
+            transition: background-color 0.3s ease;
+        }
+        .btn-secondary:hover {
+            background-color: #4b5563; /* Gray-600 */
+        }
         .btn-danger {
             background-color: #dc2626; /* Red-600 */
             color: white;
@@ -33,6 +41,23 @@
          .course-manage-card:hover {
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
+        /* Style for the hidden but functional file input */
+        input[type="file"] {
+            display: none;
+        }
+        .custom-file-upload {
+            border: 1px solid #ccc;
+            display: inline-block;
+            padding: 6px 12px;
+            cursor: pointer;
+            background-color: #f9fafb; /* Gray-50 */
+            color: #374151; /* Gray-700 */
+            border-radius: 0.375rem; /* rounded-md */
+            font-weight: 500; /* medium */
+        }
+        .custom-file-upload:hover {
+            background-color: #f3f4f6; /* Gray-100 */
+        }
     </style>
 </head>
 <body class="antialiased">
@@ -41,11 +66,28 @@
             <h1 class="text-3xl md:text-4xl font-bold text-gray-800">Panel de Administración de Cursos</h1>
             <p class="text-gray-600 mt-2">Añade, edita o elimina cursos del catálogo.</p>
             <div class="mt-4">
-                <a href="index.html" class="text-blue-600 hover:text-blue-800 font-medium underline">
+                <a href="index.html" class="text-blue-600 hover:text-blue-800 font-medium underline" id="linkToPublicCatalog">
                     &larr; Volver al Catálogo Público
                 </a>
             </div>
         </header>
+
+        <section class="mb-8 p-6 bg-white rounded-xl shadow-lg">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">Gestionar Datos (JSON)</h2>
+            <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
+                <button id="exportJsonBtn" class="btn-secondary font-semibold py-2 px-4 rounded-lg shadow-md w-full sm:w-auto">
+                    Exportar Cursos a JSON
+                </button>
+                <label for="importJsonInput" class="custom-file-upload w-full sm:w-auto text-center">
+                    Importar Cursos desde JSON
+                </label>
+                <input type="file" id="importJsonInput" accept=".json">
+            </div>
+            <p class="mt-3 text-xs text-gray-500">
+                Usa "Exportar" para generar un archivo `cursos.json` que debes subir a tu repositorio de GitHub.
+                Usa "Importar" para cargar cursos desde un archivo `cursos.json` a esta página de administración (actualiza tu LocalStorage).
+            </p>
+        </section>
 
         <section id="manageCourseSection" class="mb-10 p-6 md:p-8 bg-white rounded-xl shadow-xl">
             <h2 id="formTitle" class="text-2xl font-semibold text-gray-700 mb-6">Añadir Nuevo Curso</h2>
@@ -85,7 +127,7 @@
         </section>
 
         <section id="existingCoursesSection" class="mt-12">
-            <h2 class="text-2xl font-semibold text-gray-700 mb-6">Cursos Existentes</h2>
+            <h2 class="text-2xl font-semibold text-gray-700 mb-6">Cursos Existentes (en LocalStorage)</h2>
             <div id="existingCoursesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 </div>
         </section>
@@ -95,7 +137,7 @@
 
 
     <script>
-        // --- REFERENCIAS A ELEMENTOS DEL DOM ---
+        // --- DOM ELEMENT REFERENCES ---
         const manageCourseForm = document.getElementById('manageCourseForm');
         const formTitle = document.getElementById('formTitle');
         const courseIdInput = document.getElementById('courseId');
@@ -107,59 +149,87 @@
         const cancelEditBtn = document.getElementById('cancelEditBtn');
         
         const existingCoursesGrid = document.getElementById('existingCoursesGrid');
-        const messageContainer = document.getElementById('messageContainer');
+        const messageContainer = document.getElementById('messageContainer'); // For floating messages
 
-        let courses = []; // Array para almacenar los cursos
-        let editingCourseId = null; // Para rastrear si estamos editando
+        const exportJsonBtn = document.getElementById('exportJsonBtn');
+        const importJsonInput = document.getElementById('importJsonInput');
+        // const linkToPublicCatalog = document.getElementById('linkToPublicCatalog'); // Already defined if needed
 
-        // --- FUNCIONES ---
+        let courses = []; // Array to store courses
+        let editingCourseId = null; // To track if we are editing an existing course
 
-        // Cargar cursos desde localStorage
+        // --- CORE FUNCTIONS ---
+
+        /**
+         * Loads courses from localStorage.
+         * If localStorage data is corrupt or non-existent, initializes with an empty array.
+         */
         function loadCoursesFromStorage() {
             const storedCourses = localStorage.getItem('courses');
             if (storedCourses) {
-                courses = JSON.parse(storedCourses);
+                try {
+                    courses = JSON.parse(storedCourses);
+                    if (!Array.isArray(courses)) { // Ensure it's an array
+                        console.warn("LocalStorage 'courses' was not an array. Resetting.");
+                        courses = [];
+                    }
+                } catch (error) {
+                    console.error("Error parsing courses from localStorage:", error);
+                    courses = []; // Reset to empty if localStorage data is corrupt
+                    localStorage.removeItem('courses'); // Clear corrupt data
+                }
             } else {
-                // Si no hay cursos, podemos inicializar con un array vacío o ejemplos
-                // Para la página de admin, es mejor empezar vacío si no hay nada.
-                courses = [];
+                courses = []; // Initialize with an empty array if nothing in localStorage
             }
             renderExistingCourses();
         }
 
-        // Guardar cursos en localStorage
+        /**
+         * Saves the current 'courses' array to localStorage.
+         */
         function saveCoursesToStorage() {
             localStorage.setItem('courses', JSON.stringify(courses));
         }
 
-        // Renderizar cursos existentes para administración
+        /**
+         * Renders the list of existing courses in the admin panel.
+         * Displays a message if no courses are found.
+         */
         function renderExistingCourses() {
-            existingCoursesGrid.innerHTML = ''; // Limpiar vista
+            existingCoursesGrid.innerHTML = ''; // Clear current view
             if (courses.length === 0) {
-                existingCoursesGrid.innerHTML = `<p class="col-span-full text-center text-gray-500 py-8">No hay cursos guardados. Añade uno nuevo usando el formulario de arriba.</p>`;
+                existingCoursesGrid.innerHTML = `<p class="col-span-full text-center text-gray-500 py-8">No hay cursos guardados en LocalStorage. Añade uno nuevo o importa un archivo JSON.</p>`;
                 return;
             }
 
             courses.forEach(course => {
                 const courseDiv = document.createElement('div');
                 courseDiv.className = 'course-manage-card bg-white p-4 rounded-lg shadow-md flex flex-col space-y-3';
+                
+                // Provide defaults for potentially missing fields to prevent errors
+                const title = course.title || 'Curso sin título';
+                const description = course.description || '';
+                const imageUrl = course.imageUrl || 'https://placehold.co/400x400/cccccc/ffffff?text=No+Img';
+                const courseId = course.id || 'N/A';
+                const whatsappTag = course.whatsappTag || 'N/A';
+
                 courseDiv.innerHTML = `
                     <div>
-                        <img src="${course.imageUrl}" alt="${course.title}" class="w-full h-40 object-cover rounded-md mb-2" onerror="this.onerror=null;this.src='https://placehold.co/400x400/cccccc/ffffff?text=No+Img';">
-                        <h4 class="text-lg font-semibold text-gray-800">${course.title}</h4>
-                        <p class="text-xs text-gray-500">ID: ${course.id}</p>
-                        <p class="text-xs text-gray-500">Tag WhatsApp: ${course.whatsappTag}</p>
+                        <img src="${imageUrl}" alt="${title}" class="w-full h-40 object-cover rounded-md mb-2" onerror="this.onerror=null;this.src='https://placehold.co/400x400/cccccc/ffffff?text=No+Img';">
+                        <h4 class="text-lg font-semibold text-gray-800">${title}</h4>
+                        <p class="text-xs text-gray-500">ID: ${courseId}</p>
+                        <p class="text-xs text-gray-500">Tag WhatsApp: ${whatsappTag}</p>
                     </div>
-                    <p class="text-sm text-gray-600 flex-grow">${course.description.substring(0,80)}...</p>
+                    <p class="text-sm text-gray-600 flex-grow">${description.substring(0,80)}...</p>
                     <div class="flex space-x-2 mt-auto pt-2 border-t border-gray-200">
-                        <button data-id="${course.id}" class="edit-btn flex-1 bg-yellow-400 hover:bg-yellow-500 text-white font-medium py-1.5 px-3 rounded-md text-sm">Editar</button>
-                        <button data-id="${course.id}" class="delete-btn flex-1 btn-danger font-medium py-1.5 px-3 rounded-md text-sm">Eliminar</button>
+                        <button data-id="${courseId}" class="edit-btn flex-1 bg-yellow-400 hover:bg-yellow-500 text-white font-medium py-1.5 px-3 rounded-md text-sm">Editar</button>
+                        <button data-id="${courseId}" class="delete-btn flex-1 btn-danger font-medium py-1.5 px-3 rounded-md text-sm">Eliminar</button>
                     </div>
                 `;
                 existingCoursesGrid.appendChild(courseDiv);
             });
 
-            // Añadir event listeners a los nuevos botones
+            // Add event listeners to the newly created edit and delete buttons
             document.querySelectorAll('.edit-btn').forEach(button => {
                 button.addEventListener('click', handleEditCourse);
             });
@@ -168,17 +238,22 @@
             });
         }
         
-        // Función para mostrar mensajes (reemplazo de alert)
-        function showAdminMessage(message, type = 'info') {
+        /**
+         * Displays a floating admin message (toast notification).
+         * @param {string} message - The message to display.
+         * @param {string} [type='info'] - Type of message ('info', 'success', 'error').
+         * @param {number} [duration=3500] - Duration in milliseconds before the message fades.
+         */
+        function showAdminMessage(message, type = 'info', duration = 3500) {
             const existingMessage = document.getElementById('dynamicAdminMessage');
             if (existingMessage) {
-                existingMessage.remove();
+                existingMessage.remove(); // Remove previous message if any
             }
 
             const messageDiv = document.createElement('div');
-            messageDiv.id = 'dynamicAdminMessage'; // ID único para este mensaje
+            messageDiv.id = 'dynamicAdminMessage'; // Unique ID for this message
             messageDiv.style.position = 'fixed';
-            messageDiv.style.bottom = '20px'; // Posición en la parte inferior
+            messageDiv.style.bottom = '20px'; 
             messageDiv.style.right = '20px';
             messageDiv.style.padding = '12px 20px';
             messageDiv.style.borderRadius = '6px';
@@ -195,26 +270,32 @@
                 messageDiv.style.backgroundColor = '#3b82f6'; // Tailwind blue-500
             }
             
-            // Usar el messageContainer si existe, sino el body
-            (messageContainer || document.body).appendChild(messageDiv);
-
+            (messageContainer || document.body).appendChild(messageDiv); // Append to dedicated container or body
 
             setTimeout(() => {
-                messageDiv.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-                messageDiv.style.opacity = '0';
-                messageDiv.style.transform = 'translateY(20px)';
-                setTimeout(() => messageDiv.remove(), 500);
-            }, 3500);
+                if (messageDiv && messageDiv.parentElement) {
+                    messageDiv.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                    messageDiv.style.opacity = '0';
+                    messageDiv.style.transform = 'translateY(20px)'; // Optional: slide out effect
+                    setTimeout(() => {
+                        if (messageDiv.parentElement) messageDiv.remove();
+                    }, 500);
+                }
+            }, duration);
         }
 
+        // --- FORM HANDLING ---
 
-        // Manejar envío del formulario (agregar o editar curso)
+        /**
+         * Handles the submission of the course management form (add or edit).
+         * @param {Event} e - The form submission event.
+         */
         manageCourseForm.addEventListener('submit', (e) => {
-            e.preventDefault();
+            e.preventDefault(); // Prevent default form submission
             const title = courseTitleInput.value.trim();
             const description = courseDescriptionInput.value.trim();
             const imageUrl = courseImageUrlInput.value.trim();
-            // Convertir tag a mayúsculas y reemplazar espacios con guiones bajos
+            // Convert WhatsApp tag to uppercase and replace spaces with underscores
             const whatsappTag = courseWhatsappTagInput.value.trim().toUpperCase().replace(/\s+/g, '_');
 
             if (!title || !description || !imageUrl || !whatsappTag) {
@@ -222,91 +303,157 @@
                 return;
             }
 
-            if (editingCourseId) { // Editando curso existente
+            if (editingCourseId) { // Editing an existing course
                 const courseIndex = courses.findIndex(c => c.id === editingCourseId);
                 if (courseIndex > -1) {
                     courses[courseIndex] = { ...courses[courseIndex], title, description, imageUrl, whatsappTag };
-                    showAdminMessage('Curso actualizado con éxito.', 'success');
+                    showAdminMessage('Curso actualizado en LocalStorage con éxito.', 'success');
                 }
-            } else { // Agregando nuevo curso
-                // Generar un ID único simple basado en el tag y un timestamp
+            } else { // Adding a new course
+                // Generate a simple unique ID based on the tag and current timestamp
                 const newCourseId = whatsappTag + '-' + Date.now();
                 const newCourse = { id: newCourseId, title, description, imageUrl, whatsappTag };
                 courses.push(newCourse);
-                showAdminMessage('Curso agregado con éxito.', 'success');
+                showAdminMessage('Curso agregado a LocalStorage con éxito.', 'success');
             }
 
-            saveCoursesToStorage();
-            renderExistingCourses();
-            resetForm();
+            saveCoursesToStorage();    // Save changes to localStorage
+            renderExistingCourses();   // Re-render the list of courses
+            resetForm();               // Clear the form
         });
 
-        // Preparar formulario para edición
+        /**
+         * Populates the form with data from the course to be edited.
+         * @param {Event} e - The click event from an "Edit" button.
+         */
         function handleEditCourse(e) {
             editingCourseId = e.target.dataset.id;
             const courseToEdit = courses.find(c => c.id === editingCourseId);
             if (courseToEdit) {
                 formTitle.textContent = 'Editar Curso';
-                courseIdInput.value = courseToEdit.id;
+                courseIdInput.value = courseToEdit.id; // Hidden input, mostly for reference
                 courseTitleInput.value = courseToEdit.title;
                 courseDescriptionInput.value = courseToEdit.description;
                 courseImageUrlInput.value = courseToEdit.imageUrl;
                 courseWhatsappTagInput.value = courseToEdit.whatsappTag;
                 saveCourseBtn.textContent = 'Guardar Cambios';
-                cancelEditBtn.classList.remove('hidden');
-                window.scrollTo({ top: manageCourseSection.offsetTop - 20, behavior: 'smooth' });
+                cancelEditBtn.classList.remove('hidden'); // Show cancel button
+                // Scroll to the form and focus on the first input for better UX
+                manageCourseSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 courseTitleInput.focus();
             }
         }
         
-        // Eliminar un curso
+        /**
+         * Handles the deletion of a course.
+         * @param {Event} e - The click event from a "Delete" button.
+         */
         function handleDeleteCourse(e) {
             const courseIdToDelete = e.target.dataset.id;
-            if (confirm('¿Estás seguro de que quieres eliminar este curso? Esta acción no se puede deshacer.')) {
-                courses = courses.filter(c => c.id !== courseIdToDelete);
-                saveCoursesToStorage();
-                renderExistingCourses();
-                showAdminMessage('Curso eliminado.', 'info');
-                if (editingCourseId === courseIdToDelete) { // Si se estaba editando el curso eliminado
-                    resetForm();
+            if (confirm('¿Estás seguro de que quieres eliminar este curso de LocalStorage? Esta acción no se puede deshacer para los datos locales.')) {
+                courses = courses.filter(c => c.id !== courseIdToDelete); // Remove course from array
+                saveCoursesToStorage();    // Update localStorage
+                renderExistingCourses();   // Re-render the list
+                showAdminMessage('Curso eliminado de LocalStorage.', 'info');
+                if (editingCourseId === courseIdToDelete) { // If the deleted course was being edited
+                    resetForm(); // Reset the form
                 }
             }
         }
 
-        // Resetear formulario
+        /**
+         * Resets the course management form to its initial state.
+         */
         function resetForm() {
-            manageCourseForm.reset();
-            editingCourseId = null;
+            manageCourseForm.reset();       // Clear form fields
+            editingCourseId = null;         // Reset editing state
             formTitle.textContent = 'Añadir Nuevo Curso';
             saveCourseBtn.textContent = 'Guardar Curso';
-            cancelEditBtn.classList.add('hidden');
-            courseIdInput.value = '';
+            cancelEditBtn.classList.add('hidden'); // Hide cancel button
+            courseIdInput.value = '';       // Clear hidden ID input
         }
 
-        cancelEditBtn.addEventListener('click', resetForm);
+        cancelEditBtn.addEventListener('click', resetForm); // Event listener for cancel button
 
-        // --- INICIALIZACIÓN ---
+        // --- JSON IMPORT/EXPORT ---
+
+        /**
+         * Exports the current list of courses (from localStorage) to a JSON file.
+         */
+        exportJsonBtn.addEventListener('click', () => {
+            if (courses.length === 0) {
+                showAdminMessage('No hay cursos en LocalStorage para exportar.', 'error');
+                return;
+            }
+            const jsonString = JSON.stringify(courses, null, 2); // null, 2 for pretty-printing
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); // Create a temporary link element
+            a.href = url;
+            a.download = 'cursos.json'; // Set the download filename
+            document.body.appendChild(a);
+            a.click(); // Programmatically click the link to trigger download
+            document.body.removeChild(a); // Clean up the temporary link
+            URL.revokeObjectURL(url); // Release the object URL
+            showAdminMessage('Archivo cursos.json generado para descarga.', 'success');
+        });
+
+        /**
+         * Handles the import of courses from a selected JSON file.
+         * @param {Event} event - The change event from the file input.
+         */
+        importJsonInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const importedData = JSON.parse(e.target.result);
+                        // Basic validation: check if it's an array and if items have essential properties
+                        if (Array.isArray(importedData) && importedData.every(course => course && typeof course.id === 'string' && typeof course.title === 'string' && typeof course.whatsappTag === 'string')) {
+                            // Ask user whether to replace or merge
+                            if (confirm('¿Deseas REEMPLAZAR los cursos actuales en LocalStorage con los del archivo? (Cancelar para FUSIONAR)')) {
+                                courses = importedData; // Replace
+                            } else { // Merge
+                                importedData.forEach(importedCourse => {
+                                    const existingIndex = courses.findIndex(c => c.id === importedCourse.id);
+                                    if (existingIndex > -1) {
+                                        courses[existingIndex] = importedCourse; // Update existing
+                                    } else {
+                                        courses.push(importedCourse); // Add new
+                                    }
+                                });
+                            }
+                            saveCoursesToStorage();
+                            renderExistingCourses();
+                            showAdminMessage('Cursos importados a LocalStorage desde JSON con éxito.', 'success');
+                        } else {
+                            showAdminMessage('El archivo JSON no tiene el formato esperado o faltan propiedades esenciales (id, title, whatsappTag).', 'error');
+                        }
+                    } catch (error) {
+                        showAdminMessage('Error al leer o procesar el archivo JSON.', 'error');
+                        console.error("Error importing JSON:", error);
+                    } finally {
+                        // Reset the file input to allow importing the same file again if needed
+                        importJsonInput.value = '';
+                    }
+                };
+                reader.readAsText(file); // Read the file as text
+            }
+        });
+        
+        // --- INITIALIZATION ---
+        /**
+         * Initial setup when the DOM is fully loaded.
+         * Loads courses from storage.
+         * (Optional: Adjust link to public catalog if its name is not 'index.html')
+         */
         document.addEventListener('DOMContentLoaded', () => {
-            loadCoursesFromStorage(); // Carga inicial de cursos
+            loadCoursesFromStorage(); // Initial load of courses from localStorage
+            // Example: If your public catalog is named 'catalogo.html':
+            // const publicCatalogLink = document.getElementById('linkToPublicCatalog');
+            // if (publicCatalogLink) publicCatalogLink.href = 'catalogo.html';
         });
     </script>
 </body>
 </html>
-```
-
-**Cómo Usar la Página de Administración:**
-
-1.  **Guarda el Código:** Guarda el código de arriba en un archivo llamado `admin_cursos.html` (o el nombre que prefieras) en la **misma carpeta** donde tienes tu archivo principal del catálogo (por ejemplo, `index.html`).
-2.  **Accede Directamente:** Abre este archivo `admin_cursos.html` en tu navegador. No estará enlazado desde la página pública del catálogo.
-3.  **Gestiona Cursos:**
-    * **Añadir:** Usa el formulario para agregar nuevos cursos. Recuerda usar URLs de imágenes cuadradas.
-    * **Ver/Editar/Eliminar:** Los cursos existentes se listarán debajo del formulario. Podrás editarlos o eliminarlos.
-    * Los cambios se guardarán en `localStorage` y se reflejarán automáticamente en la página pública del catálogo cuando se recargue o se visite.
-4.  **Volver al Catálogo:** Hay un enlace en la parte superior para regresar fácilmente a la vista pública del catálogo.
-
-**Consideraciones de Seguridad:**
-
-* Esta página de administración es "oculta" solo porque no está enlazada públicamente. Cualquiera que conozca la URL directa (`admin_cursos.html`) podrá acceder a ella.
-* Para una aplicación real con datos sensibles o que necesite mayor seguridad, deberías implementar un sistema de autenticación en un backend (un servidor) para proteger el acceso a las funciones administrativas. La solución actual es adecuada para un proyecto personal o de pequeña escala donde la simplicidad es clave.
-
-Con estos dos archivos, tendrás tu catálogo público con imágenes cuadradas y una página separada para administrar los cursos. ¡Espero que esto cumpla con tus requisit
